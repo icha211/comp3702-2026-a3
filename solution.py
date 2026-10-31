@@ -86,7 +86,48 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        env = self.game_env
+        perform_action = env.perform_action
+        actions = GameEnv.ACTIONS
+        q_table = self.q_table
+        cell_valid = self.cell_valid
+        cell_lava = self.cell_lava
+        cell_launch = self.cell_launch
+        enough = self.enough_crystals
+        n_cols = self.n_cols
+        gamma = env.gamma
+        alpha = self.ql_alpha + (self.ql_alpha_end - self.ql_alpha) * min(1.0, self.steps / self.ql_budget /
+                                                                       self.ql_alpha_frac)
+        rand = random.random
+        choice = random.choice
+        state = env.get_init_state()
+        for _ in range(env.max_episode_steps):
+            frac = self.steps / self.ql_budget
+            epsilon = self.ql_eps_start + (self.ql_eps_end - self.ql_eps_start) * min(1.0, frac / self.ql_eps_frac)
+            idx = state.row * n_cols + state.col
+            cs = state.crystal_status
+            q = q_table[cs][idx]
+            valid = cell_valid[idx]
+            if rand() < epsilon:
+                a = choice(valid)
+            else:
+                a = valid[0]
+                best = q[a]
+                for i in valid:
+                    if q[i] > best:
+                        best = q[i]
+                        a = i
+            next_state, reward, _ = perform_action(state, actions[a])
+            self.steps += 1
+            nidx = next_state.row * n_cols + next_state.col
+            ncs = next_state.crystal_status
+            if cell_lava[nidx] or (cell_launch[nidx] and enough[ncs]):
+                q[a] += alpha * (reward - q[a])
+                break
+            nq = q_table[ncs][nidx]
+            nbest = max([nq[i] for i in cell_valid[nidx]])
+            q[a] += alpha * (reward + gamma * nbest - q[a])
+            state = next_state
 
     def ql_select_action(self, state: GameState):
         """
