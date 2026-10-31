@@ -142,7 +142,14 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        idx = state.row * self.n_cols + state.col
+        q = self.q_table[state.crystal_status][idx]
+        valid = self.cell_valid[idx]
+        best = valid[0]
+        for i in valid:
+            if q[i] > q[best]:
+                best = i
+        return GameEnv.ACTIONS[best]
 
     # === Feature-based Q-learning =====================================================================================
 
