@@ -67,7 +67,10 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        self.q_table = {}
+        for mask in range(1 << self.game_env.n_crystals):
+            self.q_table[self.mask_to_status(mask)] = [[0.0] * 12 for _ in range(self.n_cells)]
+        self.steps = 0
 
     def ql_train_episode(self):
         """
