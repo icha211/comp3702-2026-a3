@@ -165,7 +165,33 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        self.build_distances()
+        self.feature_cache = {}
+        self.weights = np.ones(self.n_features)
+        self.feature_scale = np.full(self.n_features, 1e-3)
+        # Scale features so all-one weights retain the previous prior, then precondition updates to match.
+        slot_prior = ((0.8, 0.2, 0.0, 0.0, 0.2), (0.25, 0.25, 0.25, 0.25, 0.2),
+                      (0.8, 0.2, 0.0, 0.0, 0.2))
+        for t in range(3):
+            for s in range(5):
+                prior = slot_prior[t][s]
+                base = 12 + (t * 5 + s) * self.SLOT
+                for offset, weight in (
+                    (0, self.fq_init_dist_weight),
+                    (1, self.fq_init_lava_weight),
+                    (5, self.fq_init_neighbour_weight),
+                    (6, self.fq_init_risk_weight),
+                ):
+                    scale = weight * prior
+                    self.feature_scale[base + offset] = scale if scale != 0.0 else 1e-3
+        start_time = time.time()
+        for cs in self.enough_crystals:
+            for idx in range(self.n_cells):
+                if self.passable[idx]:
+                    self.state_features(cs, idx)
+            if time.time() - start_time > 15:
+                break
+        self.steps = 0
 
     def fq_get_features(self, state: GameState, action):
         """
@@ -180,7 +206,8 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        matrix = self.state_features(state.crystal_status, state.row * self.n_cols + state.col)[0]
+        return matrix[self.action_index[action]].tolist()
 
     def fq_train_episode(self):
         """
