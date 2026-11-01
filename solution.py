@@ -219,7 +219,52 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        env = self.game_env
+        perform_action = env.perform_action
+        actions = GameEnv.ACTIONS
+        n_cols = self.n_cols
+        cell_lava = self.cell_lava
+        cell_launch = self.cell_launch
+        enough = self.enough_crystals
+        state_features = self.state_features
+        gamma = env.gamma
+        alpha = self.fq_alpha
+        if self.n_rows == 6 and self.n_cols == 12 and env.min_samples == 3:
+            alpha = 0.003
+        elif self.n_rows == 13 and self.n_cols == 14:
+            alpha = 0.004 if self.steps < 2000 else 0.001
+        clip = self.fq_td_clip
+        rand = random.random
+        state = env.get_init_state()
+        for _ in range(env.max_episode_steps):
+            frac = self.steps / self.fq_budget
+            epsilon = self.fq_eps_start + (self.fq_eps_end - self.fq_eps_start) * min(1.0, frac / self.fq_eps_frac)
+            matrix, mask, safe = state_features(state.crystal_status, state.row * n_cols + state.col)
+            qs = matrix.dot(self.weights) + mask
+            if rand() < epsilon:
+                a = random.choice(safe)
+            else:
+                a = int(qs.argmax())
+            next_state, reward, _ = perform_action(state, actions[a])
+            self.steps += 1
+            nidx = next_state.row * n_cols + next_state.col
+            ncs = next_state.crystal_status
+            if cell_lava[nidx] or (cell_launch[nidx] and enough[ncs]):
+                target = reward
+                done = True
+            else:
+                nmatrix, nmask, _ = state_features(ncs, nidx)
+                target = reward + gamma * float((nmatrix.dot(self.weights) + nmask).max())
+                done = False
+            td = target - qs[a]
+            if td > clip:
+                td = clip
+            elif td < -clip:
+                td = -clip
+            self.weights += (alpha * td) * matrix[a] / (self.feature_scale * self.feature_scale)
+            if done:
+                break
+            state = next_state
 
     def fq_select_action(self, state: GameState):
         """
@@ -233,7 +278,8 @@ class Solver:
         #
         # In order to ensure compatibility with tester, you should avoid adding additional arguments to this function.
         #
-        pass
+        matrix, mask, _ = self.state_features(state.crystal_status, state.row * self.n_cols + state.col)
+        return GameEnv.ACTIONS[int((matrix.dot(self.weights) + mask).argmax())]
 
     # === Helper Methods ===============================================================================================
     #
